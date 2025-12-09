@@ -32,7 +32,8 @@ class RecordingsManager: ObservableObject {
                 // Read transcription if exists
                 var transcription = ""
                 if fileManager.fileExists(atPath: transcriptionURL.path) {
-                    transcription = (try? String(contentsOf: transcriptionURL)) ?? ""
+                    // Use the non-deprecated initializer with an explicit encoding
+                    transcription = (try? String(contentsOf: transcriptionURL, encoding: .utf8)) ?? ""
 
                     // Extract just the transcription text (skip metadata lines)
                     let lines = transcription.components(separatedBy: .newlines)
