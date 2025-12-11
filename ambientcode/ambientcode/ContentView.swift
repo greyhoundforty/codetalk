@@ -65,14 +65,14 @@ struct ContentView: View {
             // Footer with correction count
             HStack {
                 Image(systemName: "brain")
-                    .foregroundColor(.blue)
+                    .foregroundColor(AppColorTheme.accent)
                 Text("\(corrector.corrections.count) corrections learned")
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(AppColorTheme.textSecondary)
                 Spacer()
             }
             .padding()
-            .background(Color(NSColor.controlBackgroundColor))
+            .background(AppColorTheme.sidebarBackground)
         }
         .frame(minWidth: 250)
     }
@@ -88,11 +88,12 @@ struct ContentView: View {
             // Status indicator
             HStack(spacing: 8) {
                 Circle()
-                    .fill(audioRecorder.isRecording ? Color.red : Color.gray)
+                    .fill(audioRecorder.isRecording ? AppColorTheme.recording : AppColorTheme.inactive)
                     .frame(width: 12, height: 12)
 
                 Text(audioRecorder.isRecording ? "Recording..." : "Ready")
                     .font(.headline)
+                    .foregroundColor(AppColorTheme.textPrimary)
             }
 
             // Recording duration
@@ -110,10 +111,8 @@ struct ContentView: View {
                     Text(audioRecorder.isRecording ? "Stop Recording" : "Start Recording")
                 }
                 .frame(width: 200, height: 50)
-                .background(audioRecorder.isRecording ? Color.red : Color.blue)
-                .foregroundColor(.white)
-                .cornerRadius(10)
             }
+            .buttonStyle(PrimaryButtonStyle(isDestructive: audioRecorder.isRecording))
             .keyboardShortcut(.space, modifiers: [])
 
             // Transcription area
@@ -126,11 +125,11 @@ struct ContentView: View {
                         if corrector.corrections.count > 0 {
                             HStack(spacing: 4) {
                                 Image(systemName: "checkmark.circle.fill")
-                                    .foregroundColor(.green)
+                                    .foregroundColor(AppColorTheme.success)
                                     .font(.caption)
                                 Text("Auto-corrected")
                                     .font(.caption)
-                                    .foregroundColor(.secondary)
+                                    .foregroundColor(AppColorTheme.textSecondary)
                             }
                         }
                     }
@@ -139,9 +138,7 @@ struct ContentView: View {
                         Text(audioRecorder.transcription)
                             .textSelection(.enabled)
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding()
-                            .background(Color.gray.opacity(0.1))
-                            .cornerRadius(8)
+                            .transcriptionStyle()
                     }
                     .frame(height: 150)
 
@@ -149,20 +146,17 @@ struct ContentView: View {
                         Button("Copy") {
                             copyToClipboard(audioRecorder.transcription)
                         }
+                        .buttonStyle(SecondaryButtonStyle(color: AppColorTheme.primary))
 
                         Button("Send to Claude") {
                             sendToClaude()
                         }
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 5)
-                        .background(Color.green)
-                        .cornerRadius(5)
+                        .buttonStyle(SuccessButtonStyle())
 
                         Button("Clear") {
                             audioRecorder.clearTranscription()
                         }
-                        .foregroundColor(.red)
+                        .buttonStyle(DangerButtonStyle(isText: true))
                     }
                 }
             }
@@ -195,13 +189,13 @@ struct ContentView: View {
                         .fontWeight(.bold)
                     Text(recording.filename)
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(AppColorTheme.textSecondary)
                 }
                 Spacer()
                 Button(action: { selectedRecording = nil }) {
                     Image(systemName: "xmark.circle.fill")
                         .font(.title2)
-                        .foregroundColor(.gray)
+                        .foregroundColor(AppColorTheme.inactive)
                 }
                 .buttonStyle(.plain)
             }
@@ -217,7 +211,7 @@ struct ContentView: View {
                             editingTranscription = recording.transcription
                             isEditingMode = true
                         }
-                        .foregroundColor(.blue)
+                        .buttonStyle(SecondaryButtonStyle(color: AppColorTheme.accent))
                     }
                 }
 
@@ -227,13 +221,13 @@ struct ContentView: View {
                         .font(.body)
                         .padding(8)
                         .background(Color(NSColor.textBackgroundColor))
-                        .border(Color.blue, width: 2)
+                        .border(AppColorTheme.focusBorder, width: 2)
                         .frame(height: 300)
 
                     HStack {
                         Text("Edit the transcription to correct mistakes. Your corrections will be learned!")
                             .font(.caption)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(AppColorTheme.textSecondary)
                         Spacer()
                     }
 
@@ -241,16 +235,12 @@ struct ContentView: View {
                         Button("Save & Learn") {
                             saveAndLearn(recording: recording)
                         }
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 15)
-                        .padding(.vertical, 8)
-                        .background(Color.blue)
-                        .cornerRadius(8)
+                        .buttonStyle(SuccessButtonStyle())
 
                         Button("Cancel") {
                             isEditingMode = false
                         }
-                        .foregroundColor(.red)
+                        .buttonStyle(DangerButtonStyle(isText: true))
                     }
                 } else {
                     // Read-only view
@@ -258,9 +248,7 @@ struct ContentView: View {
                         Text(recording.transcription)
                             .textSelection(.enabled)
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding()
-                            .background(Color.gray.opacity(0.1))
-                            .cornerRadius(8)
+                            .transcriptionStyle()
                     }
                     .frame(height: 300)
 
@@ -268,19 +256,17 @@ struct ContentView: View {
                         Button("Copy") {
                             copyToClipboard(recording.transcription)
                         }
+                        .buttonStyle(SecondaryButtonStyle(color: AppColorTheme.primary))
 
                         Button("Send to Claude") {
                             sendToClaudeFromHistory(recording)
                         }
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 5)
-                        .background(Color.green)
-                        .cornerRadius(5)
+                        .buttonStyle(SuccessButtonStyle())
 
                         Button("Open in Finder") {
                             NSWorkspace.shared.activateFileViewerSelecting([recording.audioURL])
                         }
+                        .buttonStyle(SecondaryButtonStyle(color: AppColorTheme.secondary))
                         .font(.caption)
                     }
                 }
@@ -367,16 +353,17 @@ struct RecordingRow: View {
         VStack(alignment: .leading, spacing: 4) {
             Text(recording.formattedDate)
                 .font(.headline)
+                .foregroundColor(AppColorTheme.textPrimary)
 
             if !recording.transcription.isEmpty {
                 Text(recording.transcription)
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(AppColorTheme.textSecondary)
                     .lineLimit(2)
             } else {
                 Text("No transcription")
                     .font(.caption)
-                    .foregroundColor(.red)
+                    .foregroundColor(AppColorTheme.danger)
                     .italic()
             }
         }

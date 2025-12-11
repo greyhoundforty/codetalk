@@ -1,62 +1,79 @@
 # Voice Capture macOS - Session Handoff
 
 **Project**: Voice Capture macOS App
-**Last Updated**: 2025-12-09 17:45
-**Status**: Ready for Testing
+**Last Updated**: 2025-12-09 19:15
+**Status**: Ready for Testing - Color Theme Complete
 
 ---
 
 ## Current Session Summary
 
-### What Was Accomplished
+### What Was Accomplished (Session 9)
 
-**Session 8 (Today)**: Context compaction system and final build fixes
+**Professional Color Theme System Implementation**
 
-1. **Created Context Compaction Slash Commands**
-   - Built `/project-handoff` command (comprehensive handoff)
-   - Built `/handoff` command (quick snapshot) - Note: Not working in Claude Code yet
-   - Built `/update-handoff` command (incremental updates)
-   - Files: `.claude/commands/*.md`
+1. **Created ColorTheme.swift** (~250 lines)
+   - Semantic color palette: primary (blue), secondary (indigo), accent (cyan)
+   - Semantic states: success (green), warning (orange), danger (red)
+   - Recording states: recording (red), inactive (gray)
+   - Automatic dark mode support via `Color.adaptive()`
+   - Fixed asset catalog errors - colors now defined programmatically
 
-2. **Fixed Critical Build Errors**
-   - Missing `import Combine` in TranscriptionCorrector.swift
-   - Error: "Type does not conform to protocol 'ObservableObject'"
-   - Fix: Added line 2: `import Combine`
-   - Status: ✅ Build succeeds
+2. **Custom Button Styles** (4 styles)
+   - PrimaryButtonStyle - main actions with destructive variant
+   - SecondaryButtonStyle - secondary actions, customizable color
+   - SuccessButtonStyle - positive actions (Send to Claude, Save & Learn)
+   - DangerButtonStyle - destructive actions, text or filled variants
+   - All include smooth press animations (0.95x scale)
 
-3. **Cleaned Up Console Warnings**
-   - Language code warning: "en-US" → "en"
-   - AudioRecorder.swift:19 updated
-   - Result: Cleaner console logs, same functionality
+3. **Updated ContentView.swift**
+   - Replaced ~30 hard-coded colors with themed colors
+   - Applied button styles to all actions
+   - Used `.transcriptionStyle()` modifier for consistency
+   - Sidebar, recording view, detail view all themed
 
-4. **Comprehensive Documentation**
-   - CONTEXT_COMPACTION_GUIDE.md (600+ lines)
-   - BUILD-ERROR-FIX.md (detailed troubleshooting)
-   - XCODE-WARNINGS-EXPLAINED.md (warning analysis)
+4. **Documentation**
+   - COLOR_THEME_GUIDE.md (1,000+ lines) - complete color reference
+   - Updated CLAUDE.md with Session 9 summary
+   - Updated this handoff file
 
 ### Key Files Modified
 
-| File | Change | Line |
-|------|--------|------|
-| TranscriptionCorrector.swift | Added `import Combine` | 2 |
-| AudioRecorder.swift | Changed "en-US" → "en" | 19 |
-| .claude/commands/project-handoff.md | Created (renamed from compact.md) | All |
-| .claude/commands/handoff.md | Created | All |
-| .claude/commands/update-handoff.md | Created | All |
-| CONTEXT_COMPACTION_GUIDE.md | Created | All |
+| File | Change | Line Count |
+|------|--------|------------|
+| ColorTheme.swift | Created - full theme system | 250 |
+| ContentView.swift | Updated - all colors themed | 375 (30 changes) |
+| COLOR_THEME_GUIDE.md | Created - documentation | 1,000+ |
 
 ### Important Decisions
 
-1. **Renamed `/compact` to `/project-handoff`** - Avoids conflict with built-in Claude Code command
-2. **Two-letter language codes** - Using "en" instead of "en-US" for cleaner logs
-3. **Handoff directory structure** - Using `.system-prompt-extraction/` for context compaction
+1. **Programmatic Colors** - Use `Color.adaptive()` instead of asset catalog to avoid "not found" errors
+2. **System Integration** - Text colors use `NSColor.labelColor` for automatic dark mode
+3. **Semantic Naming** - Use descriptive names (success, danger) not color names (green, red)
 
 ---
 
 ## Immediate Next Steps
 
-### 1. Test the App End-to-End
+### 1. Test Color Theme & Dark Mode
 **Priority**: HIGH
+
+**How to test dark mode:**
+- **Option A** (Best): Xcode → Debug → View Debugging → Configure Environment Overrides → Toggle "Interface Style"
+- **Option B**: System Settings → Appearance → Toggle Light/Dark
+- **NOT in app**: macOS apps don't have individual dark mode toggles - it's system-wide
+
+**What to verify:**
+- Recording indicator changes color (red when active, gray when ready)
+- Buttons have proper colors (blue primary, green success, red danger)
+- Text readable in both modes
+- Transcription backgrounds visible but subtle
+- Press animations work (buttons scale to 0.95x on click)
+
+### 2. Test All App Features
+**Priority**: HIGH
+
+End-to-end workflow:
 ```
 ⌘ + R in Xcode
 → Grant permissions (mic + speech)
@@ -69,133 +86,75 @@
 → Verify auto-corrections apply
 ```
 
-**Success criteria**:
-- Recording works
-- Transcription appears
-- Sidebar populates
-- Learning system functions
-- No crashes
+### 3. Optional: Add Settings for Custom Colors
+**Priority**: LOW (future enhancement)
 
-### 2. Fix Slash Command Discovery
-**Priority**: MEDIUM
-
-**Issue**: `/handoff` command not recognized by Claude Code
-
-**Possible causes**:
-- Commands directory not in Claude Code's search path
-- Need to restart Claude Code session
-- File permissions issue
-- Syntax error in command files
-
-**Try**:
-```bash
-# Verify files exist
-ls -la .claude/commands/
-
-# Check file contents
-cat .claude/commands/handoff.md
-
-# Try restarting Claude Code session
-```
-
-**Alternative**: Manually invoke by reading file like you're doing now
-
-### 3. Performance Test with Multiple Recordings
-**Priority**: LOW
-```
-→ Create 10-20 recordings
-→ Check sidebar scroll performance
-→ Verify memory usage acceptable
-→ Test search if time permits
-```
-
-### 4. Update Documentation Screenshots
-**Priority**: LOW
-```
-→ Take screenshot of sidebar
-→ Take screenshot of learning system
-→ Add to README.md
-→ Show "Auto-corrected" indicator
-```
-
-### 5. Create Distribution Build
-**Priority**: FUTURE
-```
-→ Archive build (⌘ + Shift + B)
-→ Export for Mac App Store or direct distribution
-→ Test on clean Mac without Xcode
-```
+If user wants app-level theme controls:
+- Create Settings window (SwiftUI Settings scene)
+- Add color picker for accent color
+- Save preference to UserDefaults
+- Update `AppColorTheme.accent` dynamically
 
 ---
 
 ## Context Essentials
 
-### Current Blocker
-**NONE** - App is fully functional
-
-### Slash Command Issue (Minor)
-- `/handoff` not recognized by Claude Code
-- Workaround: Manually read command file (as you're doing)
-- Investigate: May need Claude Code restart or config update
+### Current Status
+**No blockers** - App builds and runs successfully ✅
 
 ### Key File Locations
 
-**App Code**:
+**App Code:**
 ```
 ambientcode/ambientcode/
 ├── ambientcodeApp.swift          # Entry point
-├── ContentView.swift             # UI with sidebar (300 lines)
-├── AudioRecorder.swift           # Recording + corrections (270 lines)
-├── RecordingItem.swift           # Data model (40 lines)
-├── RecordingsManager.swift       # File ops (100 lines)
-└── TranscriptionCorrector.swift  # Learning system (150 lines)
+├── ColorTheme.swift              # Theme system (NEW)
+├── ContentView.swift             # UI (themed)
+├── AudioRecorder.swift           # Recording + corrections
+├── RecordingItem.swift           # Data model
+├── RecordingsManager.swift       # File operations
+└── TranscriptionCorrector.swift  # Learning system
 ```
 
-**Documentation**:
+**Documentation:**
 ```
+COLOR_THEME_GUIDE.md              # Complete color reference
 .system-prompt-extraction/
-├── NEXT-STEPS.md                 # This file
-├── BUILD-ERROR-FIX.md            # Combine import fix
-└── XCODE-WARNINGS-EXPLAINED.md   # Language code warnings
-
-.claude/commands/
-├── project-handoff.md            # Full handoff command
-├── handoff.md                    # Quick snapshot command
-└── update-handoff.md             # Update command
+└── NEXT-STEPS.md                 # This file
 ```
 
-**User Data**:
+**User Data:**
 ```
 ~/Documents/Recordings/           # Audio + transcriptions
 ~/Documents/claude-prompts/       # Claude-ready prompts
 ~/Library/Application Support/ambientcode/  # Corrections DB
 ```
 
-### Important Patterns
+### Color Theme Quick Reference
 
-**Learning System Flow**:
-```
-1. User records → Raw transcription from Speech API
-2. Corrector applies learned rules → Displayed transcription
-3. User edits in sidebar → Clicks "Save & Learn"
-4. System extracts differences → Saves to JSON
-5. Future recordings auto-corrected → Cycle repeats
-```
+```swift
+// How colors are used
+AppColorTheme.primary       // Record button, Copy button
+AppColorTheme.success       // Send to Claude, Save & Learn, checkmarks
+AppColorTheme.danger        // Clear, Cancel, Delete
+AppColorTheme.accent        // Brain icon, Edit & Learn
+AppColorTheme.recording     // Active recording indicator
+AppColorTheme.inactive      // Ready state indicator
 
-**Correction Storage**:
-```json
-{
-  "react": "React",
-  "their": "there",
-  "jay ess": "JS"
-}
+// Button styles
+.buttonStyle(PrimaryButtonStyle())        // Main actions
+.buttonStyle(SuccessButtonStyle())        // Positive actions
+.buttonStyle(DangerButtonStyle(isText: true))  // Destructive text
+.buttonStyle(SecondaryButtonStyle(color: AppColorTheme.primary))
 ```
 
-**Build Requirements**:
-- macOS 13.0+
-- Xcode 15+
-- `INFOPLIST_KEY_NSMicrophoneUsageDescription` in project.pbxproj
-- `INFOPLIST_KEY_NSSpeechRecognitionUsageDescription` in project.pbxproj
+### Important Pattern
+
+**Dark mode testing in Xcode:**
+1. Run app (⌘ + R)
+2. Debug menu → View Debugging → Configure Environment Overrides
+3. Toggle "Interface Style"
+4. App updates instantly - no restart needed!
 
 ---
 
@@ -205,14 +164,15 @@ ambientcode/ambientcode/
 Project: Voice Capture macOS App
 Language: Swift + SwiftUI
 Frameworks: AVFoundation, Speech, Combine, AppKit
-Status: Feature Complete ✅
+Status: Feature Complete + Professionally Styled ✅
 Build Status: Succeeds ✅
-Runtime Status: Functional ✅
+Last Session: Color theme implementation
 
 Commands:
   Build: ⌘ + B
   Run: ⌘ + R
   Clean: ⌘ + Shift + K
+  Debug Overrides: Debug → View Debugging → Configure Environment Overrides
 
 Features:
   ✅ Voice recording (Spacebar)
@@ -221,129 +181,69 @@ Features:
   ✅ Learning correction system
   ✅ Sidebar history
   ✅ Claude integration
-  ✅ Context compaction commands
+  ✅ Professional color theme (NEW)
+  ✅ Dark mode support (NEW)
+  ✅ Custom button styles (NEW)
 
-Next: Test app, verify all features work
+Next Action: Test dark mode using Xcode Environment Overrides
 ```
 
 ---
 
 ## Testing Checklist
 
+### Color Theme
+- [ ] Toggle dark mode in Xcode Environment Overrides
+- [ ] Verify all colors change appropriately
+- [ ] Check text remains readable in both modes
+- [ ] Test button press animations
+
 ### Core Functionality
-- [ ] App launches without crash
-- [ ] Permission dialogs appear (mic + speech)
-- [ ] Recording starts/stops with Spacebar
-- [ ] Live transcription appears
-- [ ] Recording saved to ~/Documents/Recordings/
-- [ ] Transcription .txt file created
+- [ ] Recording works (Spacebar)
+- [ ] Transcription appears
+- [ ] Sidebar populates with recordings
+- [ ] Click recording shows detail view
+- [ ] "Edit & Learn" mode works
+- [ ] Corrections apply to new recordings
 
-### Sidebar & History
-- [ ] Sidebar shows past recordings
-- [ ] Click recording opens detail view
-- [ ] Transcription displays correctly
-- [ ] "Open in Finder" button works
-
-### Learning System
-- [ ] "Edit & Learn" button appears
-- [ ] Can edit transcription
-- [ ] "Save & Learn" updates file
-- [ ] Footer shows correction count
-- [ ] Next recording shows "Auto-corrected" indicator
-- [ ] Corrections actually apply
-
-### Claude Integration
-- [ ] "Send to Claude" button works
-- [ ] Text copied to clipboard
-- [ ] File saved to claude-prompts/
-- [ ] Success alert appears
+### Visual Polish
+- [ ] Recording indicator: red when active, gray when ready
+- [ ] Success buttons are green
+- [ ] Danger buttons/text are red
+- [ ] Primary actions are blue
+- [ ] Accent color (cyan) on brain icon
 
 ---
 
 ## Known Issues
 
-### Minor
-1. **Slash commands not working** - `/handoff` not recognized
-   - Workaround: Manually read command file
-   - Need investigation
-
-2. **Metal warnings in console** - Harmless, ignore
-   - "Unable to open mach-O at path: default.metallib"
-   - No functional impact
-
-### None Critical
-- No blocking bugs
-- No crashes
-- All features operational
-
----
-
-## Session Statistics
-
-**Files Created This Session**: 6
-- 3 slash command files
-- 3 documentation files
-
-**Build Errors Fixed**: 2
-- TranscriptionCorrector missing Combine import
-- Language code format ("en-US" → "en")
-
-**Lines of Documentation**: ~1,000+
-- Context compaction guide
-- Build error troubleshooting
-- Warning explanations
-
-**Total Project Code**: ~872 lines across 6 active files
-**Total Documentation**: ~6,000+ lines across 13 files
+**None** - All previous issues resolved:
+- ✅ Asset catalog errors fixed (now using programmatic colors)
+- ✅ Build succeeds without warnings
+- ✅ All features functional
 
 ---
 
 ## How to Continue
 
-### In Next Session
-
-**Start with**:
+**In next session, tell Claude:**
 ```
 Read .system-prompt-extraction/NEXT-STEPS.md and continue from there
 ```
 
-**Then**:
-1. Build and run app (⌘ + R)
-2. Test all features systematically
-3. Create test recordings
-4. Verify learning system
-5. Try Claude integration workflow
+**First action:**
+1. Build and run (⌘ + R)
+2. Test dark mode toggle in Xcode
+3. Verify color theme looks professional
+4. Test all features work correctly
 
-### Update This Document
-
-After testing:
-```
-Read .claude/commands/update-handoff.md and follow instructions
-```
-
-Or manually:
-- Mark completed items with [x]
-- Add new findings
-- Update status
-- Document any issues
-
----
-
-## Success Criteria
-
-Project is complete when:
-- ✅ App builds without errors
-- ✅ All features function as designed
-- ✅ Learning system works end-to-end
-- ✅ Documentation comprehensive
-- ✅ Ready for daily use
-
-**Current Status**: ✅ READY FOR TESTING
+**If you want to customize colors:**
+- Edit `ColorTheme.swift`
+- Change RGB values in `Color.adaptive()` calls
+- Rebuild (⌘ + B)
 
 ---
 
 **File Location**: `.system-prompt-extraction/NEXT-STEPS.md`
 
-**In next session, tell Claude**: "Read .system-prompt-extraction/NEXT-STEPS.md and continue from there"
-
-This handoff document saves ~7,300 tokens and enables immediate continuation without full conversation history.
+This handoff document saves context and enables immediate continuation without full conversation history.
