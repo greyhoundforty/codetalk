@@ -46,10 +46,20 @@ A native macOS app for recording audio, transcribing with live speech recognitio
 - Refresh recording list with the reload button
 
 ### Ollama Integration
-- Ensure Ollama is running at `http://192.168.50.96:11434` (configurable in code)
+- Click the **Settings** button (gear icon) in the sidebar to configure Ollama
+- Set your Ollama server URL (e.g., `http://192.168.1.100:11434`)
+- Set your preferred model (e.g., `qwen2.5-coder:3b-instruct-q4_K_M`)
+- Use **Test Connection** to verify settings are correct
 - Click "Send to Ollama" on any recording to send the transcription to your local LLM
-- View LLM responses in a modal window
+- View LLM responses in the right-side panel
 - Copy responses to clipboard with the copy button
+
+### Configuring Settings
+- Click **Settings** (gear icon) in the left sidebar
+- **Server URL**: Configure your Ollama endpoint (default: `http://192.168.50.96:11434`)
+- **Model**: Set the model name to use (default: `qwen2.5-coder:3b-instruct-q4_K_M`)
+- **Test Connection**: Verify your Ollama server is reachable
+- **Reset to Defaults**: Restore original settings
 
 ### Claude Integration
 - Send transcriptions to Claude Desktop or Code projects

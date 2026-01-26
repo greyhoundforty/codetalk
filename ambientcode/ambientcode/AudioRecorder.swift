@@ -491,9 +491,11 @@ class AudioRecorder: NSObject, ObservableObject {
 
     // MARK: - Ollama Integration
 
-    func sendToOllama(serverURL: String = "http://192.168.50.96:11434",
-                      model: String = "qwen2.5-coder:3b-instruct-q4_K_M",
-                      completion: @escaping (Result<String, Error>) -> Void) {
+    func sendToOllama(completion: @escaping (Result<String, Error>) -> Void) {
+        let appSettings = AppSettings()
+        let serverURL = appSettings.ollamaServerURL
+        let model = appSettings.ollamaModel
+        
         guard !transcription.isEmpty else {
             completion(.failure(NSError(domain: "AudioRecorder", code: 2,
                 userInfo: [NSLocalizedDescriptionKey: "No transcription available"])))
@@ -510,6 +512,7 @@ class AudioRecorder: NSObject, ObservableObject {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = 30
 
         // Create JSON payload
         let payload: [String: Any] = [

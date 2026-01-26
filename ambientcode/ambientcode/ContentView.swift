@@ -5,6 +5,7 @@ struct ContentView: View {
     @StateObject private var recordingsManager = RecordingsManager()
     @StateObject private var corrector = TranscriptionCorrector()
     @StateObject private var themeManager = ThemeManager()
+    @StateObject private var appSettings = AppSettings()
     
     @State private var showingPermissionAlert = false
     @State private var showingClaudeSentAlert = false
@@ -12,6 +13,7 @@ struct ContentView: View {
     @State private var editingTranscription: String = ""
     @State private var isEditingMode = false
     @State private var sidebarVisibility: NavigationSplitViewVisibility = .all
+    @State private var showingSettings = false
     
     // Ollama integration
     @State private var ollamaResponse: String = ""
@@ -54,6 +56,9 @@ struct ContentView: View {
         .onChange(of: themeManager.currentTheme) { newTheme in
             AppColorTheme.current = newTheme
         }
+        .sheet(isPresented: $showingSettings) {
+            SettingsView(appSettings: appSettings, themeManager: themeManager, isPresented: $showingSettings)
+        }
     }
     
     // MARK: - Sidebar
@@ -87,7 +92,7 @@ struct ContentView: View {
             }
             .listStyle(.sidebar)
             
-            // Footer with correction count and theme toggle
+            // Footer with correction count and settings button
             VStack(spacing: 8) {
                 HStack {
                     Image(systemName: "brain")
@@ -98,20 +103,23 @@ struct ContentView: View {
                     Spacer()
                 }
                 
-                // Theme Toggle
-                HStack {
-                    Image(systemName: themeManager.currentTheme.icon)
-                        .foregroundColor(AppColorTheme.textSecondary)
-                        .font(.caption)
-                    
-                    Picker("Theme", selection: $themeManager.currentTheme) {
-                        ForEach(ThemeType.allCases, id: \.self) { theme in
-                            Text(theme.rawValue).tag(theme)
-                        }
+                // Settings Button
+                Button(action: { showingSettings = true }) {
+                    HStack {
+                        Image(systemName: "gear")
+                            .foregroundColor(AppColorTheme.textSecondary)
+                            .font(.caption)
+                        Text("Settings")
+                            .font(.caption)
+                            .foregroundColor(AppColorTheme.textSecondary)
                     }
-                    .labelsHidden()
-                    .font(.caption)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, 6)
+                    .padding(.horizontal, 8)
+                    .background(AppColorTheme.backgroundSecondary)
+                    .cornerRadius(6)
                 }
+                .buttonStyle(.plain)
             }
             .padding()
             .background(AppColorTheme.sidebarBackground)
@@ -766,6 +774,132 @@ struct ContentView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(AppColorTheme.backgroundPrimary)
+    }
+}
+
+// MARK: - Settings View
+
+struct SettingsView: View {
+    @ObservedObject var appSettings: AppSettings
+    @ObservedObject var themeManager: ThemeManager
+    @Binding var isPresented: Bool
+    @State private var testingServerURL = ""
+    @State private var testResult: String?
+    @State private var isTesting = false
+    
+    var body: some View {
+        NavigationView {
+            VStack(spacing: 20) {
+                Form {
+                    Section(header: Text("Appearance")) {
+                        Text("Theme")
+                            .font(.headline)
+                            .foregroundColor(AppColorTheme.textPrimary)
+                        
+                        Picker("Theme", selection: $themeManager.currentTheme) {
+                            ForEach(ThemeType.allCases, id: \.self) { theme in
+                                Text(theme.rawValue).tag(theme)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        
+                        Text("Choose your preferred appearance")
+                            .font(.caption2)
+                            .foregroundColor(AppColorTheme.textSecondary)
+                    }
+                    
+                    Section(header: Text("Ollama Configuration")) {
+                        Text("Server URL")
+                            .font(.headline)
+                            .foregroundColor(AppColorTheme.textPrimary)
+                        
+                        TextField("http://localhost:11434", text: $appSettings.ollamaServerURL)
+                            .textFieldStyle(.roundedBorder)
+                            .font(.caption)
+                        
+                        Text("Example: http://192.168.1.100:11434")
+                            .font(.caption2)
+                            .foregroundColor(AppColorTheme.textSecondary)
+                        
+                        Text("Model")
+                            .font(.headline)
+                            .foregroundColor(AppColorTheme.textPrimary)
+                            .padding(.top, 12)
+                        
+                        TextField("qwen2.5-coder:3b-instruct-q4_K_M", text: $appSettings.ollamaModel)
+                            .textFieldStyle(.roundedBorder)
+                            .font(.caption)
+                        
+                        Text("The model to use for transcription processing")
+                            .font(.caption2)
+                            .foregroundColor(AppColorTheme.textSecondary)
+                    }
+                    
+                    Section(header: Text("Actions")) {
+                        Button(action: { testConnection() }) {
+                            HStack {
+                                Image(systemName: isTesting ? "hourglass" : "checkmark.circle")
+                                Text(isTesting ? "Testing..." : "Test Connection")
+                            }
+                            .frame(maxWidth: .infinity)
+                        }
+                        .disabled(isTesting)
+                        
+                        if let result = testResult {
+                            Text(result)
+                                .font(.caption)
+                                .foregroundColor(result.lowercased().contains("success") ? AppColorTheme.success : AppColorTheme.danger)
+                        }
+                        
+                        Button(action: { appSettings.resetToDefaults() }) {
+                            HStack {
+                                Image(systemName: "arrow.counterclockwise")
+                                Text("Reset to Defaults")
+                            }
+                            .frame(maxWidth: .infinity)
+                            .foregroundColor(AppColorTheme.danger)
+                        }
+                    }
+                }
+            }
+            .frame(minWidth: 500, minHeight: 600)
+            .navigationTitle("Settings")
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") {
+                        isPresented = false
+                    }
+                }
+            }
+        }
+    }
+    
+    private func testConnection() {
+        isTesting = true
+        testResult = nil
+        
+        guard let url = URL(string: "\(appSettings.ollamaServerURL)/api/tags") else {
+            testResult = "Invalid URL"
+            isTesting = false
+            return
+        }
+        
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 5
+        
+        URLSession.shared.dataTask(with: request) { data, response, error in
+            DispatchQueue.main.async {
+                isTesting = false
+                
+                if let error = error {
+                    testResult = "Failed: \(error.localizedDescription)"
+                } else if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 {
+                    testResult = "✓ Connection successful"
+                } else {
+                    testResult = "Failed: Invalid response"
+                }
+            }
+        }.resume()
     }
 }
 

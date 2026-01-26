@@ -4,12 +4,10 @@ import Combine
 /// Theme types available in the app
 enum ThemeType: String, CaseIterable {
     case standard = "Standard"
-    case retro = "Retro Synthwave"
 
     var icon: String {
         switch self {
         case .standard: return "paintbrush.fill"
-        case .retro: return "waveform"
         }
     }
 }
@@ -29,7 +27,6 @@ class ThemeManager: ObservableObject {
 }
 
 /// Professional color theme system for Voice Capture app
-/// Supports multiple theme presets (Standard, Retro Synthwave)
 struct AppColorTheme {
 
     // MARK: - Theme Selection
@@ -40,202 +37,122 @@ struct AppColorTheme {
 
     /// Main brand color - used for primary actions and key UI elements
     static var primary: Color {
-        switch current {
-        case .standard:
-            return Color.adaptive(
-                light: Color(red: 0.0, green: 0.48, blue: 0.99),   // Blue #007AFF
-                dark: Color(red: 0.04, green: 0.52, blue: 1.0)     // Lighter blue #0A85FF
-            )
-        case .retro:
-            return Color(red: 0.37, green: 0.98, blue: 0.95)  // Cyan #5FFBF1
-        }
+        return Color.adaptive(
+            light: Color(red: 0.0, green: 0.48, blue: 0.99),   // Blue #007AFF
+            dark: Color(red: 0.04, green: 0.52, blue: 1.0)     // Lighter blue #0A85FF
+        )
     }
 
     /// Secondary brand color - used for secondary actions
     static var secondary: Color {
-        switch current {
-        case .standard:
-            return Color.adaptive(
-                light: Color(red: 0.35, green: 0.34, blue: 0.84),  // Indigo #5A57D5
-                dark: Color(red: 0.42, green: 0.40, blue: 0.88)    // Lighter indigo #6B66E0
-            )
-        case .retro:
-            return Color(red: 0.31, green: 0.80, blue: 0.77)  // Teal #4ECDC4
-        }
+        return Color.adaptive(
+            light: Color(red: 0.35, green: 0.34, blue: 0.84),  // Indigo #5A57D5
+            dark: Color(red: 0.42, green: 0.40, blue: 0.88)    // Lighter indigo #6B66E0
+        )
     }
 
     /// Accent color - used for highlights and special states
     static var accent: Color {
-        switch current {
-        case .standard:
-            return Color.adaptive(
-                light: Color(red: 0.35, green: 0.78, blue: 0.98),  // Cyan #59C8FA
-                dark: Color(red: 0.39, green: 0.82, blue: 1.0)     // Lighter cyan #64D2FF
-            )
-        case .retro:
-            return Color(red: 0.91, green: 0.44, blue: 0.32)  // Coral #E76F51
-        }
+        return Color.adaptive(
+            light: Color(red: 0.35, green: 0.78, blue: 0.98),  // Cyan #59C8FA
+            dark: Color(red: 0.39, green: 0.82, blue: 1.0)     // Lighter cyan #64D2FF
+        )
     }
 
     // MARK: - Semantic Colors
 
     /// Success color - used for positive actions and confirmations
     static var success: Color {
-        switch current {
-        case .standard:
-            return Color.adaptive(
-                light: Color(red: 0.20, green: 0.78, blue: 0.35),  // Green #34C759
-                dark: Color(red: 0.19, green: 0.82, blue: 0.35)    // Green #30D158
-            )
-        case .retro:
-            return Color(red: 0.37, green: 0.98, blue: 0.95)  // Cyan #5FFBF1
-        }
+        return Color.adaptive(
+            light: Color(red: 0.20, green: 0.78, blue: 0.35),  // Green #34C759
+            dark: Color(red: 0.19, green: 0.82, blue: 0.35)    // Green #30D158
+        )
     }
 
     /// Warning color - used for caution states
     static var warning: Color {
-        switch current {
-        case .standard:
-            return Color.adaptive(
-                light: Color(red: 1.0, green: 0.58, blue: 0.0),    // Orange #FF9500
-                dark: Color(red: 1.0, green: 0.62, blue: 0.04)     // Orange #FF9F0A
-            )
-        case .retro:
-            return Color(red: 1.0, green: 0.73, blue: 0.42)   // Orange #FFBA6B
-        }
+        return Color.adaptive(
+            light: Color(red: 1.0, green: 0.58, blue: 0.0),    // Orange #FF9500
+            dark: Color(red: 1.0, green: 0.62, blue: 0.04)     // Orange #FF9F0A
+        )
     }
 
     /// Danger color - used for destructive actions and errors
     static var danger: Color {
-        switch current {
-        case .standard:
-            return Color.adaptive(
-                light: Color(red: 1.0, green: 0.23, blue: 0.19),   // Red #FF3B30
-                dark: Color(red: 1.0, green: 0.27, blue: 0.23)     // Red #FF453A
-            )
-        case .retro:
-            return Color(red: 1.0, green: 0.42, blue: 0.42)   // Coral Red #FF6B6B
-        }
+        return Color.adaptive(
+            light: Color(red: 1.0, green: 0.23, blue: 0.19),   // Red #FF3B30
+            dark: Color(red: 1.0, green: 0.27, blue: 0.23)     // Red #FF453A
+        )
     }
 
     // MARK: - Recording States
 
     /// Recording indicator - bright red for active recording
     static var recording: Color {
-        switch current {
-        case .standard:
-            return Color.adaptive(
-                light: Color(red: 1.0, green: 0.27, blue: 0.23),   // Red #FF453A
-                dark: Color(red: 1.0, green: 0.31, blue: 0.27)     // Lighter red #FF4F45
-            )
-        case .retro:
-            return Color(red: 1.0, green: 0.42, blue: 0.42)   // Coral Red #FF6B6B
-        }
+        return Color.adaptive(
+            light: Color(red: 1.0, green: 0.27, blue: 0.23),   // Red #FF453A
+            dark: Color(red: 1.0, green: 0.31, blue: 0.27)     // Lighter red #FF4F45
+        )
     }
 
     /// Inactive/ready state color
     static var inactive: Color {
-        switch current {
-        case .standard:
-            return Color.adaptive(
-                light: Color(red: 0.56, green: 0.56, blue: 0.58),  // Gray #8E8E93
-                dark: Color(red: 0.56, green: 0.56, blue: 0.58)    // Gray #8E8E93
-            )
-        case .retro:
-            return Color(red: 0.40, green: 0.50, blue: 0.50)  // Muted teal
-        }
+        return Color.adaptive(
+            light: Color(red: 0.56, green: 0.56, blue: 0.58),  // Gray #8E8E93
+            dark: Color(red: 0.56, green: 0.56, blue: 0.58)    // Gray #8E8E93
+        )
     }
 
     // MARK: - Background Colors
 
     /// Primary background - main app background
     static var backgroundPrimary: Color {
-        switch current {
-        case .standard:
-            return Color(NSColor.windowBackgroundColor)
-        case .retro:
-            return Color(red: 0.10, green: 0.24, blue: 0.24)  // Dark teal #1A3D3D
-        }
+        return Color(NSColor.windowBackgroundColor)
     }
 
     /// Secondary background - cards and elevated surfaces
     static var backgroundSecondary: Color {
-        switch current {
-        case .standard:
-            return Color.adaptive(
-                light: Color(red: 0.95, green: 0.95, blue: 0.97),  // Light gray #F2F2F7
-                dark: Color(red: 0.11, green: 0.11, blue: 0.12)    // Dark gray #1C1C1E
-            )
-        case .retro:
-            return Color(red: 0.15, green: 0.32, blue: 0.32)  // Medium dark teal #264D4D
-        }
+        return Color.adaptive(
+            light: Color(red: 0.95, green: 0.95, blue: 0.97),  // Light gray #F2F2F7
+            dark: Color(red: 0.11, green: 0.11, blue: 0.12)    // Dark gray #1C1C1E
+        )
     }
 
     /// Tertiary background - subtle backgrounds and borders
     static var backgroundTertiary: Color {
-        switch current {
-        case .standard:
-            return Color.adaptive(
-                light: Color(red: 0.92, green: 0.92, blue: 0.94),  // Lighter gray #EBEBF0
-                dark: Color(red: 0.17, green: 0.17, blue: 0.18)    // Dark gray #2C2C2E
-            )
-        case .retro:
-            return Color(red: 0.97, green: 0.97, blue: 0.95)  // Cream #F7F7F2
-        }
+        return Color.adaptive(
+            light: Color(red: 0.92, green: 0.92, blue: 0.94),  // Lighter gray #EBEBF0
+            dark: Color(red: 0.17, green: 0.17, blue: 0.18)    // Dark gray #2C2C2E
+        )
     }
 
     /// Sidebar background
     static var sidebarBackground: Color {
-        switch current {
-        case .standard:
-            return Color(NSColor.controlBackgroundColor)
-        case .retro:
-            return Color(red: 0.13, green: 0.28, blue: 0.28)  // Dark teal sidebar
-        }
+        return Color(NSColor.controlBackgroundColor)
     }
 
     // MARK: - Text Colors
 
     /// Primary text - main content
     static var textPrimary: Color {
-        switch current {
-        case .standard:
-            return Color(NSColor.labelColor)
-        case .retro:
-            return Color(red: 0.97, green: 0.97, blue: 0.95)  // Cream text
-        }
+        return Color(NSColor.labelColor)
     }
 
     /// Secondary text - supporting content
     static var textSecondary: Color {
-        switch current {
-        case .standard:
-            return Color(NSColor.secondaryLabelColor)
-        case .retro:
-            return Color(red: 0.70, green: 0.85, blue: 0.85)  // Light cyan
-        }
+        return Color(NSColor.secondaryLabelColor)
     }
 
     /// Tertiary text - least emphasized content
     static var textTertiary: Color {
-        switch current {
-        case .standard:
-            return Color(NSColor.tertiaryLabelColor)
-        case .retro:
-            return Color(red: 0.50, green: 0.65, blue: 0.65)  // Muted cyan
-        }
+        return Color(NSColor.tertiaryLabelColor)
     }
 
     // MARK: - Special Effects
 
     /// Overlay for transcription display areas
     static func transcriptionBackground(opacity: Double = 0.1) -> Color {
-        switch current {
-        case .standard:
-            return Color.gray.opacity(opacity)
-        case .retro:
-            return Color(red: 0.20, green: 0.35, blue: 0.35).opacity(0.3)  // Teal overlay
-        }
+        return Color.gray.opacity(opacity)
     }
 
     /// Border color for focused elements
