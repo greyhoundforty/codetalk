@@ -4,35 +4,60 @@ struct ContentView: View {
     @StateObject private var audioRecorder = AudioRecorder()
     @StateObject private var recordingsManager = RecordingsManager()
     @StateObject private var corrector = TranscriptionCorrector()
-
+    @StateObject private var themeManager = ThemeManager()
+    
     @State private var showingPermissionAlert = false
     @State private var showingClaudeSentAlert = false
     @State private var selectedRecording: RecordingItem?
     @State private var editingTranscription: String = ""
     @State private var isEditingMode = false
     @State private var sidebarVisibility: NavigationSplitViewVisibility = .all
-
+    
+    // Ollama integration
+    @State private var ollamaResponse: String = ""
+    @State private var isLoadingOllama = false
+    @State private var ollamaError: String?
+    @State private var showingOllamaPanel = false
+    
+    // Claude Desktop/Code integration
+    @State private var showingClaudeDesktopAlert = false
+    @State private var showingClaudeCodeAlert = false
+    @State private var claudeIntegrationError: String?
+    @State private var selectedClaudeProject: AudioRecorder.ClaudeDesktopProject = .current
+    @State private var showingProjectSelector = false
+    
     var body: some View {
         NavigationSplitView(columnVisibility: $sidebarVisibility) {
             // SIDEBAR: Recording History
             sidebarContent
-        } detail: {
+        } content: {
             // MAIN CONTENT: Current Recording or Selected Recording
             if let selected = selectedRecording {
                 recordingDetailView(selected)
             } else {
                 currentRecordingView
             }
+        } detail: {
+            // RIGHT PANEL: Ollama Response
+            if showingOllamaPanel {
+                ollamaPanelContent
+            } else {
+                emptyOllamaPanelContent
+            }
         }
         .navigationSplitViewStyle(.balanced)
         .frame(minWidth: 800, minHeight: 600)
         .onAppear {
             audioRecorder.corrector = corrector
+            AppColorTheme.current = themeManager.currentTheme
+        }
+        .onChange(of: themeManager.currentTheme) { newTheme in
+            AppColorTheme.current = newTheme
         }
     }
-
+    
     // MARK: - Sidebar
-
+    
     private var sidebarContent: some View {
         VStack(spacing: 0) {
             // Header
@@ -46,7 +71,7 @@ struct ContentView: View {
                 .buttonStyle(.plain)
             }
             .padding()
-
+            
             // Recording List
             List(recordingsManager.recordings, selection: $selectedRecording) { recording in
                 RecordingRow(recording: recording)
@@ -61,48 +86,65 @@ struct ContentView: View {
                     }
             }
             .listStyle(.sidebar)
-
-            // Footer with correction count
-            HStack {
-                Image(systemName: "brain")
-                    .foregroundColor(AppColorTheme.accent)
-                Text("\(corrector.corrections.count) corrections learned")
+            
+            // Footer with correction count and theme toggle
+            VStack(spacing: 8) {
+                HStack {
+                    Image(systemName: "brain")
+                        .foregroundColor(AppColorTheme.accent)
+                    Text("\(corrector.corrections.count) corrections learned")
+                        .font(.caption)
+                        .foregroundColor(AppColorTheme.textSecondary)
+                    Spacer()
+                }
+                
+                // Theme Toggle
+                HStack {
+                    Image(systemName: themeManager.currentTheme.icon)
+                        .foregroundColor(AppColorTheme.textSecondary)
+                        .font(.caption)
+                    
+                    Picker("Theme", selection: $themeManager.currentTheme) {
+                        ForEach(ThemeType.allCases, id: \.self) { theme in
+                            Text(theme.rawValue).tag(theme)
+                        }
+                    }
+                    .labelsHidden()
                     .font(.caption)
-                    .foregroundColor(AppColorTheme.textSecondary)
-                Spacer()
+                }
             }
             .padding()
             .background(AppColorTheme.sidebarBackground)
         }
         .frame(minWidth: 250)
     }
-
+    
     // MARK: - Current Recording View
-
+    
     private var currentRecordingView: some View {
         VStack(spacing: 20) {
             Text("Voice Capture")
                 .font(.largeTitle)
                 .fontWeight(.bold)
-
+            
             // Status indicator
             HStack(spacing: 8) {
                 Circle()
                     .fill(audioRecorder.isRecording ? AppColorTheme.recording : AppColorTheme.inactive)
                     .frame(width: 12, height: 12)
-
+                
                 Text(audioRecorder.isRecording ? "Recording..." : "Ready")
                     .font(.headline)
                     .foregroundColor(AppColorTheme.textPrimary)
             }
-
+            
             // Recording duration
             if audioRecorder.isRecording {
                 Text(audioRecorder.recordingDuration)
                     .font(.title2)
                     .monospacedDigit()
             }
-
+            
             // Record button
             Button(action: { toggleRecording() }) {
                 HStack {
@@ -114,7 +156,7 @@ struct ContentView: View {
             }
             .buttonStyle(PrimaryButtonStyle(isDestructive: audioRecorder.isRecording))
             .keyboardShortcut(.space, modifiers: [])
-
+            
             // Transcription area
             if !audioRecorder.transcription.isEmpty {
                 VStack(alignment: .leading, spacing: 10) {
@@ -133,7 +175,7 @@ struct ContentView: View {
                             }
                         }
                     }
-
+                    
                     ScrollView {
                         Text(audioRecorder.transcription)
                             .textSelection(.enabled)
@@ -141,30 +183,117 @@ struct ContentView: View {
                             .transcriptionStyle()
                     }
                     .frame(height: 150)
-
-                    HStack(spacing: 10) {
-                        Button("Copy") {
-                            copyToClipboard(audioRecorder.transcription)
+                    
+                    // DIVIDER: Context vs Destinations
+                    Divider()
+                        .padding(.vertical, 8)
+                    
+                    // SECTION HEADER: Send To
+                    HStack {
+                        Image(systemName: "paperplane.fill")
+                            .foregroundColor(AppColorTheme.textSecondary)
+                            .font(.caption)
+                        Text("Send To")
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                            .foregroundColor(AppColorTheme.textSecondary)
+                            .textCase(.uppercase)
+                        Spacer()
+                    }
+                    .padding(.bottom, 8)
+                    
+                    VStack(spacing: 12) {
+                        // Row 1: Quick Actions
+                        HStack(spacing: 12) {
+                            Button(action: { copyToClipboard(audioRecorder.transcription) }) {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "doc.on.doc")
+                                    Text("Copy")
+                                }
+                                .frame(maxWidth: .infinity, minHeight: 36)
+                            }
+                            .buttonStyle(SecondaryButtonStyle(color: AppColorTheme.primary))
+                            
+                            Button(action: { sendToClaude() }) {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "folder.fill")
+                                    Text("Save File")
+                                }
+                                .frame(maxWidth: .infinity, minHeight: 36)
+                            }
+                            .buttonStyle(SecondaryButtonStyle(color: AppColorTheme.success))
+                            
+                            Button(action: { audioRecorder.clearTranscription() }) {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "trash")
+                                    Text("Clear")
+                                }
+                                .frame(maxWidth: .infinity, minHeight: 36)
+                            }
+                            .buttonStyle(DangerButtonStyle(isText: true))
                         }
-                        .buttonStyle(SecondaryButtonStyle(color: AppColorTheme.primary))
-
-                        Button("Send to Claude") {
-                            sendToClaude()
+                        
+                        // Row 2: AI Integrations
+                        HStack(spacing: 12) {
+                            Menu {
+                                Button(action: { sendToClaudeDesktop(project: .current) }) {
+                                    Label("Current Project", systemImage: "circle")
+                                }
+                                Divider()
+                                Button(action: { sendToClaudeDesktop(project: .project1) }) {
+                                    Label("Project 1", systemImage: "1.circle")
+                                }
+                                Button(action: { sendToClaudeDesktop(project: .project2) }) {
+                                    Label("Project 2", systemImage: "2.circle")
+                                }
+                                Button(action: { sendToClaudeDesktop(project: .project3) }) {
+                                    Label("Project 3", systemImage: "3.circle")
+                                }
+                                Button(action: { sendToClaudeDesktop(project: .project4) }) {
+                                    Label("Project 4", systemImage: "4.circle")
+                                }
+                                Button(action: { sendToClaudeDesktop(project: .project5) }) {
+                                    Label("Project 5", systemImage: "5.circle")
+                                }
+                            } label: {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "brain")
+                                    Text("Claude Desktop")
+                                    Image(systemName: "chevron.down")
+                                        .font(.caption2)
+                                }
+                                .frame(maxWidth: .infinity, minHeight: 36)
+                            }
+                            .buttonStyle(SecondaryButtonStyle(color: AppColorTheme.accent))
+                            
+                            Button(action: { sendToClaudeCode() }) {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "terminal.fill")
+                                    Text("Claude Code")
+                                }
+                                .frame(maxWidth: .infinity, minHeight: 36)
+                            }
+                            .buttonStyle(SecondaryButtonStyle(color: AppColorTheme.secondary))
+                            
+                            Button(action: { sendToOllama() }) {
+                                HStack(spacing: 6) {
+                                    Image(systemName: isLoadingOllama ? "hourglass" : "cpu")
+                                    Text(isLoadingOllama ? "Sending..." : "Ollama")
+                                }
+                                .frame(maxWidth: .infinity, minHeight: 36)
+                            }
+                            .buttonStyle(SecondaryButtonStyle(color: AppColorTheme.warning))
+                            .disabled(isLoadingOllama)
                         }
-                        .buttonStyle(SuccessButtonStyle())
-
-                        Button("Clear") {
-                            audioRecorder.clearTranscription()
-                        }
-                        .buttonStyle(DangerButtonStyle(isText: true))
                     }
                 }
             }
-
+            
             Spacer()
         }
         .padding(30)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(AppColorTheme.backgroundPrimary)
         .alert("Microphone Permission Required", isPresented: $showingPermissionAlert) {
             Button("OK", role: .cancel) { }
         } message: {
@@ -175,14 +304,39 @@ struct ContentView: View {
         } message: {
             Text("Transcription copied to clipboard and saved to ~/Documents/claude-prompts/\n\nPaste into Claude Desktop or Claude Code now!")
         }
+        .alert("Sent to Claude Desktop! 🎉", isPresented: $showingClaudeDesktopAlert) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            if let error = claudeIntegrationError {
+                Text("Error: \(error)")
+            } else {
+                Text("Transcription sent to Claude Desktop app!")
+            }
+        }
+        .alert("Ready for Claude Code! 📋", isPresented: $showingClaudeCodeAlert) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            if let error = claudeIntegrationError {
+                Text("Error: \(error)")
+            } else {
+                Text("Transcription copied to clipboard and Terminal activated!\n\nPress ⌘V or paste into your Claude Code session.")
+            }
+        }
     }
-
+    
     // MARK: - Recording Detail View
-
+    
     private func recordingDetailView(_ recording: RecordingItem) -> some View {
         VStack(spacing: 20) {
             // Header
             HStack {
+                Button(action: { selectedRecording = nil }) {
+                    Image(systemName: "arrow.left.circle.fill")
+                        .font(.title2)
+                        .foregroundColor(AppColorTheme.primary)
+                }
+                .buttonStyle(.plain)
+                
                 VStack(alignment: .leading) {
                     Text(recording.formattedDate)
                         .font(.title2)
@@ -192,14 +346,8 @@ struct ContentView: View {
                         .foregroundColor(AppColorTheme.textSecondary)
                 }
                 Spacer()
-                Button(action: { selectedRecording = nil }) {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.title2)
-                        .foregroundColor(AppColorTheme.inactive)
-                }
-                .buttonStyle(.plain)
             }
-
+            
             // Transcription editor
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
@@ -214,7 +362,7 @@ struct ContentView: View {
                         .buttonStyle(SecondaryButtonStyle(color: AppColorTheme.accent))
                     }
                 }
-
+                
                 if isEditingMode {
                     // Editable text
                     TextEditor(text: $editingTranscription)
@@ -223,20 +371,20 @@ struct ContentView: View {
                         .background(Color(NSColor.textBackgroundColor))
                         .border(AppColorTheme.focusBorder, width: 2)
                         .frame(height: 300)
-
+                    
                     HStack {
                         Text("Edit the transcription to correct mistakes. Your corrections will be learned!")
                             .font(.caption)
                             .foregroundColor(AppColorTheme.textSecondary)
                         Spacer()
                     }
-
+                    
                     HStack(spacing: 10) {
                         Button("Save & Learn") {
                             saveAndLearn(recording: recording)
                         }
                         .buttonStyle(SuccessButtonStyle())
-
+                        
                         Button("Cancel") {
                             isEditingMode = false
                         }
@@ -251,35 +399,121 @@ struct ContentView: View {
                             .transcriptionStyle()
                     }
                     .frame(height: 300)
-
-                    HStack(spacing: 10) {
-                        Button("Copy") {
-                            copyToClipboard(recording.transcription)
+                    
+                    // DIVIDER: Context vs Actions
+                    Divider()
+                        .padding(.vertical, 8)
+                    
+                    // SECTION HEADER: Actions
+                    HStack {
+                        Image(systemName: "paperplane.fill")
+                            .foregroundColor(AppColorTheme.textSecondary)
+                            .font(.caption)
+                        Text("Actions")
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                            .foregroundColor(AppColorTheme.textSecondary)
+                            .textCase(.uppercase)
+                        Spacer()
+                    }
+                    .padding(.bottom, 8)
+                    
+                    VStack(spacing: 12) {
+                        // Row 1: Quick Actions
+                        HStack(spacing: 12) {
+                            Button(action: { copyToClipboard(recording.transcription) }) {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "doc.on.doc")
+                                    Text("Copy")
+                                }
+                                .frame(maxWidth: .infinity, minHeight: 36)
+                            }
+                            .buttonStyle(SecondaryButtonStyle(color: AppColorTheme.primary))
+                            
+                            Button(action: { sendToClaudeFromHistory(recording) }) {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "folder.fill")
+                                    Text("Save File")
+                                }
+                                .frame(maxWidth: .infinity, minHeight: 36)
+                            }
+                            .buttonStyle(SecondaryButtonStyle(color: AppColorTheme.success))
+                            
+                            Button(action: { NSWorkspace.shared.activateFileViewerSelecting([recording.audioURL]) }) {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "folder.badge.gearshape")
+                                    Text("Finder")
+                                }
+                                .frame(maxWidth: .infinity, minHeight: 36)
+                            }
+                            .buttonStyle(SecondaryButtonStyle(color: AppColorTheme.secondary))
                         }
-                        .buttonStyle(SecondaryButtonStyle(color: AppColorTheme.primary))
-
-                        Button("Send to Claude") {
-                            sendToClaudeFromHistory(recording)
+                        
+                        // Row 2: AI Integrations
+                        HStack(spacing: 12) {
+                            Menu {
+                                Button(action: { sendToClaudeDesktopFromHistory(recording, project: .current) }) {
+                                    Label("Current Project", systemImage: "circle")
+                                }
+                                Divider()
+                                Button(action: { sendToClaudeDesktopFromHistory(recording, project: .project1) }) {
+                                    Label("Project 1", systemImage: "1.circle")
+                                }
+                                Button(action: { sendToClaudeDesktopFromHistory(recording, project: .project2) }) {
+                                    Label("Project 2", systemImage: "2.circle")
+                                }
+                                Button(action: { sendToClaudeDesktopFromHistory(recording, project: .project3) }) {
+                                    Label("Project 3", systemImage: "3.circle")
+                                }
+                                Button(action: { sendToClaudeDesktopFromHistory(recording, project: .project4) }) {
+                                    Label("Project 4", systemImage: "4.circle")
+                                }
+                                Button(action: { sendToClaudeDesktopFromHistory(recording, project: .project5) }) {
+                                    Label("Project 5", systemImage: "5.circle")
+                                }
+                            } label: {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "brain")
+                                    Text("Claude Desktop")
+                                    Image(systemName: "chevron.down")
+                                        .font(.caption2)
+                                }
+                                .frame(maxWidth: .infinity, minHeight: 36)
+                            }
+                            .buttonStyle(SecondaryButtonStyle(color: AppColorTheme.accent))
+                            
+                            Button(action: { sendToClaudeCodeFromHistory(recording) }) {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "terminal.fill")
+                                    Text("Claude Code")
+                                }
+                                .frame(maxWidth: .infinity, minHeight: 36)
+                            }
+                            .buttonStyle(SecondaryButtonStyle(color: AppColorTheme.secondary))
+                            
+                            Button(action: { sendToOllamaFromHistory(recording) }) {
+                                HStack(spacing: 6) {
+                                    Image(systemName: isLoadingOllama ? "hourglass" : "cpu")
+                                    Text(isLoadingOllama ? "Sending..." : "Ollama")
+                                }
+                                .frame(maxWidth: .infinity, minHeight: 36)
+                            }
+                            .buttonStyle(SecondaryButtonStyle(color: AppColorTheme.warning))
+                            .disabled(isLoadingOllama)
                         }
-                        .buttonStyle(SuccessButtonStyle())
-
-                        Button("Open in Finder") {
-                            NSWorkspace.shared.activateFileViewerSelecting([recording.audioURL])
-                        }
-                        .buttonStyle(SecondaryButtonStyle(color: AppColorTheme.secondary))
-                        .font(.caption)
                     }
                 }
             }
-
+            
             Spacer()
         }
         .padding(30)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(AppColorTheme.backgroundPrimary)
     }
-
+    
     // MARK: - Actions
-
+    
     private func toggleRecording() {
         if audioRecorder.isRecording {
             audioRecorder.stopRecording()
@@ -294,28 +528,28 @@ struct ContentView: View {
             }
         }
     }
-
+    
     private func copyToClipboard(_ text: String) {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         pasteboard.setString(text, forType: .string)
     }
-
+    
     private func sendToClaude() {
         if audioRecorder.sendToClaude() {
             showingClaudeSentAlert = true
         }
     }
-
+    
     private func sendToClaudeFromHistory(_ recording: RecordingItem) {
         // Save to claude-prompts
         let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         let claudeDir = documentsPath.appendingPathComponent("claude-prompts")
         try? FileManager.default.createDirectory(at: claudeDir, withIntermediateDirectories: true)
-
+        
         let timestamp = ISO8601DateFormatter().string(from: Date()).replacingOccurrences(of: ":", with: "-")
         let claudePromptURL = claudeDir.appendingPathComponent("prompt_\(timestamp).txt")
-
+        
         do {
             try recording.transcription.write(to: claudePromptURL, atomically: true, encoding: .utf8)
             copyToClipboard(recording.transcription)
@@ -324,23 +558,214 @@ struct ContentView: View {
             print("Failed to save Claude prompt: \(error)")
         }
     }
-
+    
     private func saveAndLearn(recording: RecordingItem) {
         let original = recording.transcription
         let corrected = editingTranscription
-
+        
         // Learn from the correction
         corrector.learnFromCorrection(original: original, corrected: corrected)
-
+        
         // Update the recording
         recordingsManager.updateRecording(recording, withTranscription: corrected)
-
+        
         // Update selected recording
         if let index = recordingsManager.recordings.firstIndex(where: { $0.id == recording.id }) {
             selectedRecording = recordingsManager.recordings[index]
         }
-
+        
         isEditingMode = false
+    }
+    
+    private func sendToClaudeDesktop(project: AudioRecorder.ClaudeDesktopProject = .current) {
+        let result = audioRecorder.sendToClaudeDesktop(project: project)
+        claudeIntegrationError = result.error
+        showingClaudeDesktopAlert = true
+    }
+    
+    private func sendToClaudeDesktopFromHistory(_ recording: RecordingItem, project: AudioRecorder.ClaudeDesktopProject = .current) {
+        let originalTranscription = audioRecorder.transcription
+        audioRecorder.transcription = recording.transcription
+        let result = audioRecorder.sendToClaudeDesktop(project: project)
+        audioRecorder.transcription = originalTranscription
+        claudeIntegrationError = result.error
+        showingClaudeDesktopAlert = true
+    }
+    
+    private func sendToClaudeCode() {
+        // Default to clipboard method (most reliable)
+        let result = audioRecorder.sendToClaudeCode(method: .clipboard)
+        claudeIntegrationError = result.error
+        showingClaudeCodeAlert = true
+    }
+    
+    private func sendToClaudeCodeFromHistory(_ recording: RecordingItem) {
+        let originalTranscription = audioRecorder.transcription
+        audioRecorder.transcription = recording.transcription
+        let result = audioRecorder.sendToClaudeCode(method: .clipboard)
+        audioRecorder.transcription = originalTranscription
+        claudeIntegrationError = result.error
+        showingClaudeCodeAlert = true
+    }
+    
+    private func sendToOllama() {
+        isLoadingOllama = true
+        ollamaError = nil
+        showingOllamaPanel = true
+        
+        audioRecorder.sendToOllama { result in
+            DispatchQueue.main.async {
+                isLoadingOllama = false
+                
+                switch result {
+                case .success(let response):
+                    ollamaResponse = response
+                case .failure(let error):
+                    ollamaError = error.localizedDescription
+                }
+            }
+        }
+    }
+    
+    private func sendToOllamaFromHistory(_ recording: RecordingItem) {
+        isLoadingOllama = true
+        ollamaError = nil
+        showingOllamaPanel = true
+        
+        // Temporarily set transcription for sending
+        let originalTranscription = audioRecorder.transcription
+        audioRecorder.transcription = recording.transcription
+        
+        audioRecorder.sendToOllama { result in
+            DispatchQueue.main.async {
+                // Restore original transcription
+                audioRecorder.transcription = originalTranscription
+                isLoadingOllama = false
+                
+                switch result {
+                case .success(let response):
+                    ollamaResponse = response
+                case .failure(let error):
+                    ollamaError = error.localizedDescription
+                }
+            }
+        }
+    }
+    
+    // MARK: - Ollama Panel (Right Column)
+    
+    private var emptyOllamaPanelContent: some View {
+        VStack(spacing: 20) {
+            Image(systemName: "cpu")
+                .font(.system(size: 40))
+                .foregroundColor(AppColorTheme.textSecondary)
+            
+            Text("Send to Ollama")
+                .font(.headline)
+                .foregroundColor(AppColorTheme.textPrimary)
+            
+            Text("Send a transcription to your local Ollama server to see responses here")
+                .font(.caption)
+                .foregroundColor(AppColorTheme.textSecondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal)
+            
+            Spacer()
+        }
+        .padding(30)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(AppColorTheme.backgroundPrimary)
+    }
+    
+    private var ollamaPanelContent: some View {
+        VStack(spacing: 20) {
+            // Header
+            HStack {
+                Image(systemName: "cpu")
+                    .foregroundColor(AppColorTheme.warning)
+                    .font(.title3)
+                
+                Text("Ollama Response")
+                    .font(.headline)
+                
+                Spacer()
+                
+                Button(action: { showingOllamaPanel = false }) {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundColor(AppColorTheme.textSecondary)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding()
+            .background(AppColorTheme.sidebarBackground)
+            
+            // Content
+            if let error = ollamaError {
+                // Error view
+                VStack(spacing: 15) {
+                    Image(systemName: "exclamationmark.triangle")
+                        .font(.system(size: 40))
+                        .foregroundColor(AppColorTheme.danger)
+                    
+                    Text("Error")
+                        .font(.headline)
+                        .fontWeight(.bold)
+                    
+                    Text(error)
+                        .font(.caption)
+                        .foregroundColor(AppColorTheme.textSecondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal)
+                    
+                    Spacer()
+                    
+                    Button("Retry") {
+                        sendToOllama()
+                    }
+                    .buttonStyle(PrimaryButtonStyle())
+                }
+                .padding()
+            } else if isLoadingOllama {
+                // Loading state
+                VStack(spacing: 15) {
+                    ProgressView()
+                        .scaleEffect(1.5, anchor: .center)
+                    
+                    Text("Sending to Ollama...")
+                        .font(.body)
+                        .foregroundColor(AppColorTheme.textSecondary)
+                    
+                    Spacer()
+                }
+                .padding()
+            } else {
+                // Success view
+                VStack(alignment: .leading, spacing: 10) {
+                    ScrollView {
+                        Text(ollamaResponse)
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .transcriptionStyle()
+                    }
+                    
+                    HStack(spacing: 10) {
+                        Button(action: { copyToClipboard(ollamaResponse) }) {
+                            HStack(spacing: 6) {
+                                Image(systemName: "doc.on.doc")
+                                Text("Copy")
+                            }
+                            .frame(maxWidth: .infinity, minHeight: 36)
+                        }
+                        .buttonStyle(SecondaryButtonStyle(color: AppColorTheme.primary))
+                    }
+                }
+                .padding()
+            }
+            
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(AppColorTheme.backgroundPrimary)
     }
 }
 
@@ -348,13 +773,13 @@ struct ContentView: View {
 
 struct RecordingRow: View {
     let recording: RecordingItem
-
+    
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(recording.formattedDate)
                 .font(.headline)
                 .foregroundColor(AppColorTheme.textPrimary)
-
+            
             if !recording.transcription.isEmpty {
                 Text(recording.transcription)
                     .font(.caption)

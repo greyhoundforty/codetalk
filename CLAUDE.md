@@ -2,6 +2,664 @@
 
 ## 2025-12-09 - Initial Project Creation & Build Fixes
 
+### Session 10: Ollama Server Integration
+
+**User Request:**
+- Add "Send to Ollama" button to send transcriptions to local Ollama server
+- User has Ollama running on Ubuntu box at `http://192.168.50.96:11434`
+- Previously used curl command with `qwen2.5-coder:3b-instruct-q4_K_M` model
+
+**Features Implemented:**
+
+1. **AudioRecorder Ollama Integration (AudioRecorder.swift)**
+   - Added `sendToOllama()` method with URLSession HTTP client
+   - Configurable server URL (default: `http://192.168.50.96:11434`)
+   - Configurable model (default: `qwen2.5-coder:3b-instruct-q4_K_M`)
+   - Non-streaming API call (`stream: false`)
+   - JSON payload creation with model, prompt, and stream parameters
+   - Response parsing extracting the `"response"` field
+   - Completion handler with `Result<String, Error>` for async handling
+   - Comprehensive error handling for network/parsing failures
+
+2. **UI Integration (ContentView.swift)**
+   - Added 4 new state variables: `showingOllamaResponse`, `ollamaResponse`, `isLoadingOllama`, `ollamaError`
+   - "Send to Ollama" button in current recording view
+   - "Send to Ollama" button in recording history detail view
+   - Loading state ("Sending..." text while in progress)
+   - Button disabled state during API call
+   - Modal sheet for displaying Ollama responses
+
+3. **Response Viewer (ollamaResponseView)**
+   - Full-screen modal window with NavigationView
+   - Success view: Scrollable response text with text selection enabled
+   - Error view: Error icon, message, and "Retry" button
+   - "Copy Response" button for quick clipboard access
+   - "Done" button to close modal
+   - Close toolbar button for alternative dismissal
+   - Styled with AppColorTheme for consistency
+
+4. **Action Methods**
+   - `sendToOllama()`: Sends current transcription to Ollama
+   - `sendToOllamaFromHistory()`: Sends historical recording to Ollama
+   - Both methods handle loading states and error display
+   - Async response handling with DispatchQueue.main
+
+**API Implementation:**
+
+```swift
+// Request Format
+POST http://192.168.50.96:11434/api/generate
+{
+  "model": "qwen2.5-coder:3b-instruct-q4_K_M",
+  "prompt": "TRANSCRIBED_TEXT",
+  "stream": false
+}
+
+// Response Format
+{
+  "response": "AI_GENERATED_RESPONSE",
+  "model": "qwen2.5-coder:3b-instruct-q4_K_M",
+  "created_at": "...",
+  "done": true
+}
+```
+
+**User Workflow:**
+1. Record voice → Transcribe
+2. Click "Send to Ollama"
+3. Wait for response (loading indicator)
+4. View AI-generated response in modal
+5. Copy response or close modal
+
+**Code Changes:**
+- AudioRecorder.swift: Added `sendToOllama()` method (~60 lines)
+- ContentView.swift: Added Ollama state variables, buttons, response view, action methods (~110 lines)
+
+**Documentation Created:**
+- OLLAMA_INTEGRATION.md (900+ lines): Complete integration guide
+  - Overview and features
+  - How to use (current recording + history)
+  - Customization (server URL, model selection)
+  - API details (request/response format)
+  - Error handling and debugging
+  - Use cases and workflow examples
+  - Comparison: Claude vs Ollama
+  - Performance tips
+  - Security considerations
+  - Troubleshooting guide
+  - Technical implementation details
+
+**Configuration:**
+- Server URL: `http://192.168.50.96:11434` (configurable)
+- Model: `qwen2.5-coder:3b-instruct-q4_K_M` (configurable)
+- Stream: `false` (non-streaming, waits for complete response)
+- Timeout: Default URLSession timeout (~60 seconds)
+
+**Error Handling:**
+- Network errors (connection failed, timeout)
+- Invalid server URL
+- No data received
+- Invalid JSON response format
+- Missing "response" field in JSON
+- User-friendly error messages in UI
+
+**Benefits:**
+✅ Direct AI responses within the app
+✅ No manual copy/paste workflow
+✅ Local network processing (privacy)
+✅ Free self-hosted inference
+✅ Instant feedback for voice prompts
+✅ Works with any Ollama model
+
+**Next Steps:**
+- Build and test (⌘ + B, ⌘ + R)
+- Try "Send to Ollama" button with a test recording
+- Verify response displays correctly
+- Test error handling (stop Ollama server temporarily)
+- Customize server URL or model if needed
+
+---
+
+### Session 10b: Claude Desktop & Claude Code Direct Integration
+
+**User Request:**
+- Add direct integration with Claude Desktop and Claude Code running on same macOS host
+- User wants to interact with local coding agents, not just web API
+- Ideally send as "slash command" to running Claude Code session
+
+**Problem Solved:**
+- Ollama integration requires separate server setup
+- "Send to Claude (File)" requires manual copy/paste workflow
+- No direct automation for Claude Desktop or Claude Code
+
+**Features Implemented:**
+
+1. **Claude Desktop Integration (AudioRecorder.swift)**
+   - Added `sendToClaudeDesktop()` method with AppleScript automation
+   - Activates Claude Desktop app
+   - Types transcription into input field
+   - Presses Enter to submit
+   - Returns success/error tuple
+   - Full error handling with NSAppleScript error messages
+   - Escapes special characters (backslashes, quotes)
+
+2. **Claude Code Integration (AudioRecorder.swift)**
+   - Added `sendToClaudeCode()` method with terminal automation
+   - Supports both Terminal.app and iTerm
+   - Activates terminal application
+   - Sends transcription as command to front window
+   - Automatically presses Enter (executes command)
+   - Escapes newlines, backslashes, quotes for shell safety
+   - Configurable terminal app parameter
+
+3. **UI Updates (ContentView.swift)**
+   - Reorganized button layout into two rows
+   - Row 1: Copy, Send to Claude (File), Clear
+   - Row 2: → Claude Desktop, → Claude Code, → Ollama
+   - Arrow prefix (→) indicates direct integration
+   - Added state variables for alerts: `showingClaudeDesktopAlert`, `showingClaudeCodeAlert`, `claudeIntegrationError`
+   - Added 4 new action methods: `sendToClaudeDesktop()`, `sendToClaudeDesktopFromHistory()`, `sendToClaudeCode()`, `sendToClaudeCodeFromHistory()`
+   - Added success/error alerts for both integrations
+   - Updated both current recording view and recording history view
+
+4. **Accessibility Permissions Required**
+   - Claude integrations require macOS Accessibility permissions
+   - Allows Voice Capture to control other apps via AppleScript
+   - User must grant permission in System Settings → Privacy & Security → Accessibility
+   - First-time use triggers permission prompt
+
+**AppleScript Implementation:**
+
+**Claude Desktop:**
+```applescript
+tell application "Claude"
+    activate
+    delay 0.3
+end tell
+
+tell application "System Events"
+    tell process "Claude"
+        keystroke "TRANSCRIPTION"
+        delay 0.2
+        keystroke return
+    end tell
+end tell
+```
+
+**Claude Code (Terminal.app):**
+```applescript
+tell application "Terminal"
+    activate
+    delay 0.3
+    do script "TRANSCRIPTION" in front window
+end tell
+```
+
+**Claude Code (iTerm):**
+```applescript
+tell application "iTerm"
+    activate
+    delay 0.3
+    tell current session of current window
+        write text "TRANSCRIPTION"
+    end tell
+end tell
+```
+
+**User Workflows:**
+
+**Workflow 1: Quick Question to Claude Desktop**
+1. Record voice: "What's the difference between weak and unowned?"
+2. Click "→ Claude Desktop"
+3. Claude Desktop activates with question submitted
+4. Get instant answer
+
+**Workflow 2: Slash Command to Claude Code**
+1. Terminal running `claude` in project directory
+2. Record: "Create a git commit that fixes the authentication bug"
+3. Click "→ Claude Code"
+4. Terminal receives command and Claude Code processes it
+
+**Workflow 3: Code Generation via Claude Code**
+1. Record: "Write a Swift function for Fibonacci sequence"
+2. Click "→ Claude Code"
+3. Claude Code generates code in terminal
+
+**Integration Comparison:**
+
+| Method | Claude Desktop | Claude Code | Ollama | File |
+|--------|---------------|-------------|--------|------|
+| Speed | Instant | Instant | ~2-5s | Manual |
+| Network | Internet | Internet | Local | None |
+| Context | New message | Same session | None | None |
+| Automation | Full | Full | Full | Manual |
+| Privacy | Cloud | Cloud | Local | Local |
+
+**Code Changes:**
+- AudioRecorder.swift: Added 2 new methods (~90 lines)
+  - `sendToClaudeDesktop()`: AppleScript for Claude Desktop app
+  - `sendToClaudeCode(terminalApp:)`: AppleScript for Terminal/iTerm
+- ContentView.swift: Added 4 action methods, 3 state variables, 2 alerts, reorganized button layout (~80 lines)
+
+**Documentation Created:**
+- CLAUDE_DESKTOP_CODE_INTEGRATION.md (1,000+ lines): Comprehensive guide
+  - Overview of integration options
+  - How each integration works
+  - Setup instructions for Accessibility permissions
+  - Workflows and use cases
+  - Customization guide (terminal app, delays)
+  - Troubleshooting section
+  - Advanced usage examples
+  - Security and privacy considerations
+  - Technical implementation details
+  - AppleScript source code
+  - Future enhancements
+
+**Requirements:**
+- macOS Accessibility permissions for Voice Capture
+- Claude Desktop app installed (for Desktop integration)
+- Terminal.app or iTerm with running `claude` session (for Code integration)
+- Claude Desktop must be named "Claude" in Applications folder
+
+**Key Features:**
+✅ Direct automation without copy/paste
+✅ Works with running Claude Code sessions
+✅ Supports slash commands and prompts
+✅ Instant submission to Claude Desktop
+✅ Terminal.app and iTerm support
+✅ Full error handling and user feedback
+✅ Escapes special characters safely
+✅ Context-aware (maintains Claude Code session context)
+
+**Benefits:**
+- **Speed**: 5 seconds from voice to Claude response
+- **Automation**: No manual intervention needed
+- **Context**: Claude Code maintains session context
+- **Flexibility**: Works with Desktop or CLI
+- **Privacy**: Local AppleScript automation
+
+**Troubleshooting:**
+- "Operation not permitted": Grant Accessibility permissions
+- "Claude Desktop not found": Verify app is installed and named correctly
+- "Terminal window not found": Make sure Terminal has active window
+- Multi-line issues: Newlines automatically escaped
+
+**Next Steps:**
+- Build and test (⌘ + B, ⌘ + R)
+- Grant Accessibility permissions when prompted
+- Test "→ Claude Desktop" button with Claude Desktop running
+- Test "→ Claude Code" button with Terminal running `claude`
+- Verify transcriptions submit correctly
+- Customize terminal app if using iTerm
+
+---
+
+### Session 10c: Claude Desktop Project Selection & Accessibility Fix
+
+**User Issues Reported:**
+1. "System Events got an error: Application isn't running" - Claude Desktop IS running
+2. Request: Send to specific projects in Claude Desktop
+
+**Root Causes Identified:**
+1. AppleScript using bundle ID instead of process name (Electron app compatibility issue)
+2. Missing Accessibility permissions (macOS security)
+3. No way to target specific Claude Desktop projects
+
+**Features Implemented:**
+
+1. **Fixed Claude Desktop AppleScript (AudioRecorder.swift)**
+   - Changed from bundle ID to process name "Claude"
+   - More reliable process detection: `exists process "Claude"`
+   - Added input focus with `Cmd+L` before pasting
+   - Better error messages: "Claude Desktop is not running. Please open Claude Desktop app."
+   - Clipboard-based approach (safer for Electron apps)
+
+2. **Claude Desktop Project Selection (AudioRecorder.swift)**
+   - Added `ClaudeDesktopProject` enum with 6 options:
+     - `.current` - Stay in current project (default)
+     - `.project1` through `.project5` - Navigate to specific projects
+   - Project navigation via keyboard shortcuts (Cmd+1, Cmd+2, etc.)
+   - Automatic project switching before sending transcription
+   - Configurable delays for UI responsiveness
+
+3. **UI: Project Selector Menu (ContentView.swift)**
+   - Changed "→ Claude Desktop" button to dropdown Menu
+   - 6 menu items:
+     - "Current Project" (quick default)
+     - "Project 1 (⌘1)" through "Project 5 (⌘5)"
+   - Menu with chevron-down icon
+   - Available in both current recording and history views
+   - Maintains consistent button styling
+
+4. **Updated Action Methods**
+   - `sendToClaudeDesktop(project:)` - Accepts project parameter
+   - `sendToClaudeDesktopFromHistory(_:project:)` - History version with project
+   - Default to `.current` for quick sending
+   - State management for selected project
+
+**Updated AppleScript Flow:**
+
+```applescript
+tell application "System Events"
+    -- Check if Claude is running
+    if not (exists process "Claude") then
+        error "Claude Desktop is not running"
+    end if
+
+    -- Activate
+    set frontmost of process "Claude" to true
+    delay 0.5
+
+    -- Navigate to project (if not .current)
+    keystroke "2" using command down  -- Example: Project 2
+    delay 0.3
+
+    -- Focus input with Cmd+L
+    keystroke "l" using command down
+    delay 0.2
+
+    -- Paste
+    keystroke "v" using command down
+    delay 0.3
+
+    -- Submit
+    keystroke return
+end tell
+```
+
+**Accessibility Permissions Required:**
+
+**Problem:** macOS blocks AppleScript from controlling other apps by default
+
+**Solution:** Grant Accessibility permissions
+1. System Settings → Privacy & Security → Accessibility
+2. Click lock 🔒 and authenticate
+3. Click + button
+4. Add Voice Capture app from DerivedData or Applications
+5. Toggle ON ✅
+6. Restart Voice Capture
+
+**How to Find App Path:**
+```bash
+# Development build
+find ~/Library/Developer/Xcode/DerivedData -name "ambientcode.app" -type d
+
+# Installed app
+/Applications/ambientcode.app
+```
+
+**User Workflows:**
+
+**Workflow 1: Send to Current Project (Quick)**
+```
+1. Record voice prompt
+2. Click "→ Claude Desktop" menu
+3. Select "Current Project"
+4. ✅ Sent to currently open project
+```
+
+**Workflow 2: Send to Specific Project**
+```
+1. Organize Claude Desktop projects:
+   - Project 1: Work codebase
+   - Project 2: Personal projects
+   - Project 3: Learning
+2. Record: "Review authentication code"
+3. Click "→ Claude Desktop" dropdown
+4. Select "Project 1 (⌘1)"
+5. ✅ Navigates to Project 1 and sends automatically!
+```
+
+**Workflow 3: Multi-Project Development**
+```
+Morning:
+  - Standup notes → Project 1 (Work)
+  - Personal todos → Project 2 (Personal)
+
+Coding:
+  - Code reviews → Project 1 (Work)
+  - Architecture → Project 3 (Planning)
+
+Evening:
+  - Learning → Project 4 (Learning)
+```
+
+**Benefits:**
+✅ **Context Preservation**: Each project maintains separate conversation history
+✅ **No Manual Switching**: Voice Capture navigates for you
+✅ **Parallel Work**: Work on multiple codebases simultaneously
+✅ **Better Organization**: Conversations separated by context
+✅ **Faster Workflow**: Record → Select project → Done
+
+**Code Changes:**
+- AudioRecorder.swift: Added `ClaudeDesktopProject` enum, updated `sendToClaudeDesktop(project:)` method (~50 lines)
+- ContentView.swift: Changed button to Menu with 6 items, updated action methods with project parameter (~40 lines)
+
+**Documentation Created:**
+- CLAUDE_DESKTOP_PROJECTS.md (1,000+ lines): Complete project selection guide
+  - How project selector works
+  - AppleScript flow explanation
+  - Accessibility permissions setup
+  - Troubleshooting guide
+  - Project organization tips
+  - Advanced customization
+  - FAQ section
+- FIX_ACCESSIBILITY_PERMISSIONS.md (500+ lines): Troubleshooting guide
+  - Step-by-step permission granting
+  - Visual guide
+  - Terminal commands for verification
+  - Common issues and solutions
+  - Testing procedures
+
+**Key Fixes:**
+1. ✅ Changed from bundle ID to process name (Electron compatibility)
+2. ✅ Added `Cmd+L` for input focus (ensures paste works)
+3. ✅ Project navigation via keyboard shortcuts (Cmd+1 through Cmd+5)
+4. ✅ Better error messages for troubleshooting
+5. ✅ Comprehensive Accessibility permissions guide
+
+**Troubleshooting Commands:**
+
+**Test 1: Check if Claude is visible**
+```bash
+osascript -e 'tell application "System Events" to get name of every process' | grep Claude
+```
+
+**Test 2: Full integration test**
+```bash
+echo "Test message" | pbcopy
+osascript << 'EOF'
+tell application "System Events"
+    set frontmost of process "Claude" to true
+    delay 0.5
+    keystroke "l" using command down
+    delay 0.2
+    keystroke "v" using command down
+    delay 0.3
+    keystroke return
+end tell
+EOF
+```
+
+**Next Steps:**
+- Rebuild app (⌘ + Shift + K, ⌘ + B, ⌘ + R)
+- Grant Accessibility permissions (see FIX_ACCESSIBILITY_PERMISSIONS.md)
+- Open Claude Desktop and set up projects
+- Test project selector dropdown
+- Record voice and send to specific projects
+- Verify project navigation works
+
+---
+
+### Session 10d: UI Enhancement - SF Symbols & Visual Hierarchy
+
+**User Requests:**
+1. Add clear divider between transcription (context) and buttons (destinations)
+2. Use icons instead of text-only buttons
+3. Consistent button styling with distinctive icons (floppy disk for save, etc.)
+
+**Features Implemented:**
+
+1. **Visual Divider & Section Headers (ContentView.swift)**
+   - Added `Divider()` between transcription area and action buttons
+   - Vertical padding (8pt) for breathing room
+   - Section header with icon: `paperplane.fill` ✈️
+   - Text: "SEND TO" (current recording) / "ACTIONS" (history)
+   - Uppercase, small, gray text for subtle visual hierarchy
+   - Clear separation of content vs actions
+
+2. **SF Symbols Integration (All Buttons)**
+   - **Copy**: `doc.on.doc` 📄 (two documents icon)
+   - **Save File**: `folder.fill` 📁 (folder icon, not floppy disk)
+   - **Clear**: `trash` 🗑️ (trash can)
+   - **Claude Desktop**: `brain` 🧠 (AI thinking icon)
+   - **Claude Code**: `terminal.fill` 💻 (terminal icon)
+   - **Ollama**: `cpu` 🖥️ (CPU/server icon)
+   - **Ollama Loading**: `hourglass` ⏳ (loading state)
+   - **Finder**: `folder.badge.gearshape` 📂⚙️ (system folder)
+   - **Projects**: `1.circle`, `2.circle`, etc. 1️⃣ (numbered circles)
+
+3. **Consistent Button Styling**
+   - All buttons: `minHeight: 36` for consistent touch targets
+   - Equal width: `maxWidth: .infinity` distributes space evenly
+   - Icon + Text: `HStack(spacing: 6)` with icon left, text right
+   - Row spacing: `12pt` between buttons
+   - Maintained color coding by category:
+     - Primary (Blue): Copy
+     - Success (Green): Save File
+     - Danger (Red): Clear
+     - Accent (Cyan): Claude Desktop
+     - Secondary (Indigo): Claude Code
+     - Warning (Orange): Ollama
+
+4. **Updated Menu Items**
+   - Claude Desktop dropdown: Added SF Symbols to menu items
+   - `Label("Current Project", systemImage: "circle")` ⭕
+   - `Label("Project 1", systemImage: "1.circle")` 1️⃣
+   - `Label("Project 2", systemImage: "2.circle")` 2️⃣
+   - Consistent visual language throughout
+
+5. **Layout Improvements**
+   - Two-row button layout maintained
+   - Row 1: Quick actions (Copy, Save, Clear/Finder)
+   - Row 2: AI integrations (Claude Desktop, Claude Code, Ollama)
+   - Better visual balance with icons
+   - Easier scanning at a glance
+
+**Visual Structure:**
+
+```
+┌─────────────────────────────────────┐
+│  Transcription Text Area            │
+│  (Scrollable, 150px)                │
+└─────────────────────────────────────┘
+        ▼
+┌─────────────────────────────────────┐
+│  ───────────────────────────────── │  ← Divider
+└─────────────────────────────────────┘
+        ▼
+┌─────────────────────────────────────┐
+│  ✈️  SEND TO                         │  ← Section Header
+└─────────────────────────────────────┘
+        ▼
+┌─────────────────────────────────────┐
+│  Row 1: Quick Actions               │
+│  [📄 Copy] [📁 Save] [🗑️ Clear]     │
+└─────────────────────────────────────┘
+        ▼
+┌─────────────────────────────────────┐
+│  Row 2: AI Integrations             │
+│  [🧠 Desktop ▼] [💻 Code] [🖥️ Ollama]│
+└─────────────────────────────────────┘
+```
+
+**SF Symbols Used:**
+
+| Icon | SF Symbol | Button |
+|------|-----------|--------|
+| 📄📄 | `doc.on.doc` | Copy |
+| 📁 | `folder.fill` | Save File |
+| 🗑️ | `trash` | Clear |
+| 🧠 | `brain` | Claude Desktop |
+| 💻 | `terminal.fill` | Claude Code |
+| 🖥️ | `cpu` | Ollama |
+| ⏳ | `hourglass` | Ollama (loading) |
+| 📂⚙️ | `folder.badge.gearshape` | Finder |
+| ✈️ | `paperplane.fill` | Section header |
+| ⭕ | `circle` | Current Project |
+| 1️⃣-5️⃣ | `1.circle`-`5.circle` | Projects 1-5 |
+
+**Benefits:**
+✅ **Faster Recognition**: Icons provide instant visual cues
+✅ **Clear Separation**: Divider makes context vs actions obvious
+✅ **Professional Look**: Consistent styling across all buttons
+✅ **Accessibility**: Icons + text labels (not icon-only)
+✅ **Scalability**: Easy to add new buttons with same pattern
+✅ **Native Feel**: SF Symbols integrate with macOS design language
+
+**Code Changes:**
+- ContentView.swift: Updated current recording view (~80 lines)
+- ContentView.swift: Updated recording detail view (~80 lines)
+- Added divider, section header, SF Symbols to all buttons
+- Menu items updated with Label() and systemImage
+- Consistent button frames and spacing
+
+**Documentation Created:**
+- UI_ICONS_GUIDE.md (1,000+ lines): Complete SF Symbols reference
+  - Icon reference table with all symbols used
+  - Design principles and color coding
+  - Visual hierarchy explanation
+  - Accessibility notes
+  - Customization guide
+  - Alternative icon suggestions
+  - SF Symbols browser links
+  - Testing and preview code
+
+**Design Principles Applied:**
+1. **Consistent Sizing**: All buttons 36pt min height
+2. **Color Coding**: Category-based colors (AI = cyan/indigo, Save = green)
+3. **Icon Logic**: Semantic icons (brain = AI, terminal = CLI)
+4. **Visual Hierarchy**: Clear divider separates content from actions
+5. **Accessibility**: Icon + text (not icon-only)
+
+**User Experience Improvements:**
+- **Before**: Text-only buttons, no clear separation
+- **After**: Icon + text, clear divider, section header, visual hierarchy
+
+**Example Button Transformation:**
+
+```swift
+// Before (text only)
+Button("Send to Claude (File)") {
+    sendToClaude()
+}
+
+// After (icon + text)
+Button(action: { sendToClaude() }) {
+    HStack(spacing: 6) {
+        Image(systemName: "folder.fill")
+        Text("Save File")
+    }
+    .frame(maxWidth: .infinity, minHeight: 36)
+}
+```
+
+**SF Symbols Resources:**
+- SF Symbols App: https://developer.apple.com/sf-symbols/
+- 5,000+ icons available
+- Free from Apple
+- Integrates with SwiftUI automatically
+
+**Next Steps:**
+- Rebuild and test (⌘ + B, ⌘ + R)
+- Verify icon rendering
+- Test button touch targets (36pt minimum)
+- Check divider appearance
+- Optional: Customize icons (see UI_ICONS_GUIDE.md)
+- Optional: Add more SF Symbols to other UI elements
+
+---
+
 ### Session 9: Professional Color Theme System
 
 **User Request:**

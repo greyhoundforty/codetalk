@@ -266,6 +266,295 @@ class AudioRecorder: NSObject, ObservableObject {
         }
     }
 
+    // MARK: - Claude Desktop Integration
+
+    enum ClaudeDesktopProject: Int {
+        case current = 0      // Stay in current project
+        case project1 = 1     // Cmd+1
+        case project2 = 2     // Cmd+2
+        case project3 = 3     // Cmd+3
+        case project4 = 4     // Cmd+4
+        case project5 = 5     // Cmd+5
+    }
+
+    func sendToClaudeDesktop(project: ClaudeDesktopProject = .current) -> (success: Bool, error: String?) {
+        guard !transcription.isEmpty else {
+            return (false, "No transcription available")
+        }
+
+        // Copy to clipboard first (safer for Electron apps)
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(transcription, forType: .string)
+
+        // Build project navigation keystroke if needed
+        let projectNavigation = project == .current ? "" : """
+            -- Navigate to project \(project.rawValue)
+            keystroke "\(project.rawValue)" using command down
+            delay 0.3
+
+        """
+
+        // Use System Events exclusively (works better with Electron apps)
+        let script = """
+        tell application "System Events"
+            -- Find Claude process
+            if not (exists process "Claude") then
+                error "Claude Desktop is not running. Please open Claude Desktop app."
+            end if
+
+            -- Activate Claude
+            set frontmost of process "Claude" to true
+            delay 0.5
+
+            \(projectNavigation)
+            -- Click in the input area first (ensures focus)
+            -- Cmd+L focuses the input in Claude Desktop
+            keystroke "l" using command down
+            delay 0.2
+
+            -- Paste the transcription
+            keystroke "v" using command down
+            delay 0.3
+
+            -- Submit with Enter
+            keystroke return
+        end tell
+        """
+
+        var error: NSDictionary?
+        if let scriptObject = NSAppleScript(source: script) {
+            scriptObject.executeAndReturnError(&error)
+            if let error = error {
+                let errorMessage = error[NSAppleScript.errorMessage] as? String ?? "Unknown error"
+                print("AppleScript error: \(errorMessage)")
+                return (false, errorMessage)
+            }
+            return (true, nil)
+        } else {
+            return (false, "Failed to create AppleScript")
+        }
+    }
+
+    // MARK: - Claude Code Integration
+
+    enum ClaudeCodeMethod {
+        case clipboard      // Copy to clipboard, you paste manually (safest)
+        case iTerm         // Send to iTerm via AppleScript
+        case tmux(String)  // Send to specific tmux session
+        case file          // Write to file that Claude Code watches
+    }
+
+    func sendToClaudeCode(method: ClaudeCodeMethod = .clipboard) -> (success: Bool, error: String?) {
+        guard !transcription.isEmpty else {
+            return (false, "No transcription available")
+        }
+
+        switch method {
+        case .clipboard:
+            return sendToClaudeCodeViaClipboard()
+
+        case .iTerm:
+            return sendToClaudeCodeViaiTerm()
+
+        case .tmux(let sessionName):
+            return sendToClaudeCodeViaTmux(sessionName: sessionName)
+
+        case .file:
+            return sendToClaudeCodeViaFile()
+        }
+    }
+
+    // Method 1: Clipboard (most reliable)
+    private func sendToClaudeCodeViaClipboard() -> (success: Bool, error: String?) {
+        // Copy to clipboard
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(transcription, forType: .string)
+
+        // Activate Terminal/iTerm
+        let script = """
+        tell application "System Events"
+            -- Try to find Terminal or iTerm
+            set terminalApp to ""
+            if exists process "iTerm2" then
+                set terminalApp to "iTerm2"
+            else if exists process "Terminal" then
+                set terminalApp to "Terminal"
+            end if
+
+            if terminalApp is not "" then
+                set frontmost of process terminalApp to true
+                delay 0.3
+                -- Paste with Cmd+V
+                keystroke "v" using command down
+            else
+                error "No terminal application running"
+            end if
+        end tell
+        """
+
+        var error: NSDictionary?
+        if let scriptObject = NSAppleScript(source: script) {
+            scriptObject.executeAndReturnError(&error)
+            if let error = error {
+                let errorMessage = error[NSAppleScript.errorMessage] as? String ?? "Unknown error"
+                print("AppleScript error: \(errorMessage)")
+                return (false, errorMessage)
+            }
+            return (true, nil)
+        } else {
+            return (false, "Failed to create AppleScript")
+        }
+    }
+
+    // Method 2: iTerm AppleScript (if you use iTerm)
+    private func sendToClaudeCodeViaiTerm() -> (success: Bool, error: String?) {
+        // Escape for AppleScript
+        let escapedText = transcription
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\"", with: "\\\"")
+
+        let script = """
+        tell application "iTerm"
+            activate
+            delay 0.3
+            tell current session of current window
+                write text "\(escapedText)"
+            end tell
+        end tell
+        """
+
+        var error: NSDictionary?
+        if let scriptObject = NSAppleScript(source: script) {
+            scriptObject.executeAndReturnError(&error)
+            if let error = error {
+                let errorMessage = error[NSAppleScript.errorMessage] as? String ?? "Unknown error"
+                print("AppleScript error: \(errorMessage)")
+                return (false, errorMessage)
+            }
+            return (true, nil)
+        } else {
+            return (false, "Failed to create AppleScript")
+        }
+    }
+
+    // Method 3: tmux session targeting
+    private func sendToClaudeCodeViaTmux(sessionName: String) -> (success: Bool, error: String?) {
+        // Escape for shell
+        let escapedText = transcription
+            .replacingOccurrences(of: "'", with: "'\\''")
+
+        // Use tmux send-keys to send to specific session
+        let command = "tmux send-keys -t '\(sessionName)' '\(escapedText)' Enter"
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/sh")
+        process.arguments = ["-c", command]
+
+        let pipe = Pipe()
+        process.standardError = pipe
+
+        do {
+            try process.run()
+            process.waitUntilExit()
+
+            if process.terminationStatus == 0 {
+                return (true, nil)
+            } else {
+                let data = pipe.fileHandleForReading.readDataToEndOfFile()
+                let errorOutput = String(data: data, encoding: .utf8) ?? "Unknown error"
+                return (false, "tmux error: \(errorOutput)")
+            }
+        } catch {
+            return (false, "Failed to run tmux: \(error.localizedDescription)")
+        }
+    }
+
+    // Method 4: File-based communication
+    private func sendToClaudeCodeViaFile() -> (success: Bool, error: String?) {
+        let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let claudeCodeDir = documentsPath.appendingPathComponent("claude-code-inbox")
+        try? FileManager.default.createDirectory(at: claudeCodeDir, withIntermediateDirectories: true)
+
+        let timestamp = ISO8601DateFormatter().string(from: Date()).replacingOccurrences(of: ":", with: "-")
+        let promptURL = claudeCodeDir.appendingPathComponent("prompt_\(timestamp).txt")
+
+        do {
+            try transcription.write(to: promptURL, atomically: true, encoding: .utf8)
+            print("Prompt saved for Claude Code: \(promptURL.path)")
+            return (true, nil)
+        } catch {
+            return (false, "Failed to save file: \(error.localizedDescription)")
+        }
+    }
+
+    // MARK: - Ollama Integration
+
+    func sendToOllama(serverURL: String = "http://192.168.50.96:11434",
+                      model: String = "qwen2.5-coder:3b-instruct-q4_K_M",
+                      completion: @escaping (Result<String, Error>) -> Void) {
+        guard !transcription.isEmpty else {
+            completion(.failure(NSError(domain: "AudioRecorder", code: 2,
+                userInfo: [NSLocalizedDescriptionKey: "No transcription available"])))
+            return
+        }
+
+        // Create request
+        guard let url = URL(string: "\(serverURL)/api/generate") else {
+            completion(.failure(NSError(domain: "AudioRecorder", code: 3,
+                userInfo: [NSLocalizedDescriptionKey: "Invalid server URL"])))
+            return
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        // Create JSON payload
+        let payload: [String: Any] = [
+            "model": model,
+            "prompt": transcription,
+            "stream": false
+        ]
+
+        do {
+            request.httpBody = try JSONSerialization.data(withJSONObject: payload)
+        } catch {
+            completion(.failure(error))
+            return
+        }
+
+        // Send request
+        let task = URLSession.shared.dataTask(with: request) { data, response, error in
+            if let error = error {
+                completion(.failure(error))
+                return
+            }
+
+            guard let data = data else {
+                completion(.failure(NSError(domain: "AudioRecorder", code: 4,
+                    userInfo: [NSLocalizedDescriptionKey: "No data received"])))
+                return
+            }
+
+            do {
+                // Parse JSON response
+                if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let response = json["response"] as? String {
+                    completion(.success(response))
+                } else {
+                    completion(.failure(NSError(domain: "AudioRecorder", code: 5,
+                        userInfo: [NSLocalizedDescriptionKey: "Invalid response format"])))
+                }
+            } catch {
+                completion(.failure(error))
+            }
+        }
+
+        task.resume()
+    }
+
     // MARK: - Timer
 
     private func startTimer() {

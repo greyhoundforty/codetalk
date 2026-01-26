@@ -1,3 +1,5 @@
+.prompt-docs/*
+
 # Xcode
 *.xcodeproj/*
 !*.xcodeproj/project.pbxproj
